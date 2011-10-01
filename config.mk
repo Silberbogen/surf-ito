@@ -21,8 +21,8 @@ CFLAGS += -std=c99 -pedantic -Wall -Os ${INCS} ${CPPFLAGS}
 LDFLAGS += -g ${LIBS}
 
 # Solaris
-#CFLAGS += -fast ${INCS} -DVERSION=\"${VERSION}\"
-#LDFLAGS += ${LIBS}
+# CFLAGS += -fast ${INCS} -DVERSION=\"${VERSION}\"
+# LDFLAGS += ${LIBS}
 
 # compiler and linker
-CC = cc
+CC = clang

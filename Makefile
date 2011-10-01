@@ -26,7 +26,7 @@ config.h:
 
 surf: ${OBJ}
 	@echo CC -o $@
-	@${CC} -o $@ surf.o ${LDFLAGS}
+	@${CC} -o $@ surf.o ${LDFLAGS} -lX11
 
 clean:
 	@echo cleaning
