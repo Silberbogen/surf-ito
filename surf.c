@@ -21,7 +21,6 @@
 #include <sys/file.h>
 
 #define LENGTH(x)               (sizeof x / sizeof x[0])
-#define CLEANMASK(mask)         (mask & ~(GDK_MOD2_MASK))
 
 enum { AtomFind, AtomGo, AtomUri, AtomLast };
 
@@ -38,6 +37,7 @@ typedef struct Client {
 	char *title, *linkhover;
 	const char *uri, *needle;
 	gint progress;
+	gboolean sslfailed;
 	struct Client *next;
 	gboolean zoomed;
 } Client;
@@ -95,14 +95,16 @@ static void print(Client *c, const Arg *arg);
 static GdkFilterReturn processx(GdkXEvent *xevent, GdkEvent *event, gpointer d);
 static void progresschange(WebKitWebView *view, GParamSpec *pspec, Client *c);
 static void reload(Client *c, const Arg *arg);
-static void resize(GtkWidget *w, GtkAllocation *a, Client *c);
-static void scroll(Client *c, const Arg *arg);
+static void scroll_h(Client *c, const Arg *arg);
+static void scroll_v(Client *c, const Arg *arg);
+static void scroll(GtkAdjustment *a, const Arg *arg);
 static void setatom(Client *c, int a, const char *v);
 static void setcookie(SoupCookie *c);
 static void setup(void);
 static void sigchld(int unused);
 static void source(Client *c, const Arg *arg);
 static void spawn(Client *c, const Arg *arg);
+static void eval(Client *c, const Arg *arg);
 static void stop(Client *c, const Arg *arg);
 static void titlechange(WebKitWebView *v, WebKitWebFrame* frame, const char* title, Client *c);
 static void update(Client *c);
@@ -126,12 +128,15 @@ buildpath(const char *path) {
 		apath = g_strconcat(g_get_home_dir(), "/", path, NULL);
 	if((p = strrchr(apath, '/'))) {
 		*p = '\0';
-		g_mkdir_with_parents(apath, 0755);
+		g_mkdir_with_parents(apath, 0700);
+		g_chmod(apath, 0700); /* in case it existed */
 		*p = '/';
 	}
 	/* creating file (gives error when apath ends with "/") */
-	if((f = fopen(apath, "a")))
+	if((f = fopen(apath, "a"))) {
+		g_chmod(apath, 0600); /* always */
 		fclose(f);
+	}
 	return apath;
 }
 
@@ -140,21 +145,29 @@ cleanup(void) {
 	while(clients)
 		destroyclient(clients);
 	g_free(cookiefile);
-	g_free(historyfile);
 	g_free(scriptfile);
 	g_free(stylefile);
 }
 
 void
-runscript(WebKitWebFrame *frame, JSContextRef js) {
-	JSStringRef jsscript;
-	char *script;
+evalscript(JSContextRef js, char *script, char* scriptname) {
+	JSStringRef jsscript, jsscriptname;
 	JSValueRef exception = NULL;
+
+	jsscript = JSStringCreateWithUTF8CString(script);
+	jsscriptname = JSStringCreateWithUTF8CString(scriptname);
+	JSEvaluateScript(js, jsscript, JSContextGetGlobalObject(js), jsscriptname, 0, &exception);
+	JSStringRelease(jsscript);
+	JSStringRelease(jsscriptname);
+}
+
+void
+runscript(WebKitWebFrame *frame) {
+	char *script;
 	GError *error;
-	
+
 	if(g_file_get_contents(scriptfile, &script, NULL, &error)) {
-		jsscript = JSStringCreateWithUTF8CString(script);
-		JSEvaluateScript(js, jsscript, JSContextGetGlobalObject(js), NULL, 0, &exception);
+		evalscript(webkit_web_frame_get_global_context(frame), script, scriptfile);
 	}
 }
 
@@ -212,6 +225,7 @@ void
 destroyclient(Client *c) {
 	Client *p;
 
+	webkit_web_view_stop_loading(c->view);
 	gtk_widget_destroy(c->indicator);
 	gtk_widget_destroy(GTK_WIDGET(c->view));
 	gtk_widget_destroy(c->scroll);
@@ -251,8 +265,11 @@ drawindicator(Client *c) {
 	w = c->indicator;
 	width = c->progress * w->allocation.width / 100;
 	gc = gdk_gc_new(w->window);
-	gdk_color_parse(strstr(uri, "https://") == uri ?
-			progress_trust : progress, &fg);
+	if(strstr(uri, "https://") == uri)
+		gdk_color_parse(c->sslfailed ?
+		                progress_untrust : progress_trust, &fg);
+	else
+		gdk_color_parse(progress, &fg);
 	gdk_gc_set_rgb_fg_color(gc, &fg);
 	gdk_draw_rectangle(w->window,
 			w->style->bg_gc[GTK_WIDGET_STATE(w)],
@@ -316,10 +333,8 @@ geturi(Client *c) {
 
 void
 gotheaders(SoupMessage *msg, gpointer v) {
-	SoupURI *uri;
 	GSList *l, *p;
 
-	uri = soup_message_get_uri(msg);
 	for(p = l = soup_cookies_from_response(msg); p;
 		p = g_slist_next(p))  {
 		setcookie((SoupCookie *)p->data);
@@ -345,7 +360,7 @@ keypress(GtkWidget* w, GdkEventKey *ev, Client *c) {
 	updatewinid(c);
 	for(i = 0; i < LENGTH(keys); i++) {
 		if(gdk_keyval_to_lower(ev->keyval) == keys[i].keyval
-				&& CLEANMASK(ev->state) == keys[i].mod
+				&& (ev->state & keys[i].mod) == keys[i].mod
 				&& keys[i].func) {
 			keys[i].func(c, &(keys[i].arg));
 			processed = TRUE;
@@ -368,9 +383,24 @@ linkhover(WebKitWebView *v, const char* t, const char* l, Client *c) {
 
 void
 loadstatuschange(WebKitWebView *view, GParamSpec *pspec, Client *c) {
+	WebKitWebFrame *frame;
+	WebKitWebDataSource *src;
+	WebKitNetworkRequest *request;
+	SoupMessage *msg;
+	char *uri;
+
 	switch(webkit_web_view_get_load_status (c->view)) {
 	case WEBKIT_LOAD_COMMITTED:
-		setatom(c, AtomUri, geturi(c));
+		uri = geturi(c);
+		if(strstr(uri, "https://") == uri) {
+			frame = webkit_web_view_get_main_frame(c->view);
+			src = webkit_web_frame_get_data_source(frame);
+			request = webkit_web_data_source_get_request(src);
+			msg = webkit_network_request_get_message(request);
+			c->sslfailed = soup_message_get_flags(msg)
+			               ^ SOUP_MESSAGE_CERTIFICATE_TRUSTED;
+		}
+		setatom(c, AtomUri, uri);
 		break;
 	case WEBKIT_LOAD_FINISHED:
 		c->progress = 0;
@@ -397,10 +427,6 @@ loaduri(Client *c, const Arg *arg) {
 	}
 	else {
 		webkit_web_view_load_uri(c->view, u);
-		FILE *f;
-		f = fopen(historyfile, "a+");
-		fprintf(f, u);
-		fclose(f);
 		c->progress = 0;
 		c->title = copystr(&c->title, u);
 		g_free(u);
@@ -423,7 +449,7 @@ newclient(void) {
 	char *uri, *ua;
 
 	if(!(c = calloc(1, sizeof(Client))))
-		die("Kann malloc nicht durchführen!\n");
+		die("Cannot malloc!\n");
 	/* Window */
 	if(embed) {
 		c->win = gtk_plug_new(embed);
@@ -437,7 +463,7 @@ newclient(void) {
 		 * window class (WM_CLASS) is capped, while the resource is in
 		 * lowercase.   Both these values come as a pair.
 		 */
-		gtk_window_set_wmclass(GTK_WINDOW(c->win), "surf", "surf");
+		gtk_window_set_wmclass(GTK_WINDOW(c->win), "surf", "Surf");
 
 		/* TA:  20091214:  And set the role here as well -- so that
 		 * sessions can pick this up.
@@ -447,7 +473,6 @@ newclient(void) {
 	gtk_window_set_default_size(GTK_WINDOW(c->win), 800, 600);
 	g_signal_connect(G_OBJECT(c->win), "destroy", G_CALLBACK(destroywin), c);
 	g_signal_connect(G_OBJECT(c->win), "key-press-event", G_CALLBACK(keypress), c);
-	g_signal_connect(G_OBJECT(c->win), "size-allocate", G_CALLBACK(resize), c);
 
 	/* VBox */
 	c->vbox = gtk_vbox_new(FALSE, 0);
@@ -495,7 +520,7 @@ newclient(void) {
 	gdk_window_add_filter(GTK_WIDGET(c->win)->window, processx, c);
 	webkit_web_view_set_full_content_zoom(c->view, TRUE);
 	frame = webkit_web_view_get_main_frame(c->view);
-	runscript(frame, webkit_web_frame_get_global_context(frame));
+	runscript(frame);
 	settings = webkit_web_view_get_settings(c->view);
 	if(!(ua = getenv("SURF_USERAGENT")))
 		ua = useragent;
@@ -505,13 +530,13 @@ newclient(void) {
 	g_object_set(G_OBJECT(settings), "auto-load-images", loadimage, NULL);
 	g_object_set(G_OBJECT(settings), "enable-plugins", plugin, NULL);
 	g_object_set(G_OBJECT(settings), "enable-scripts", script, NULL);
-	g_object_set(G_OBJECT(settings), "enable-spatial-navigation", true, NULL);
+	g_object_set(G_OBJECT(settings), "enable-spatial-navigation", SPATIAL_BROWSING, NULL);
 
 	g_free(uri);
 
 	setatom(c, AtomFind, "");
 	setatom(c, AtomUri, "about:blank");
-	if(NOBACKGROUND)
+	if(HIDE_BACKGROUND)
 		webkit_web_view_set_transparent(c->view, TRUE);
 
 	c->title = NULL;
@@ -521,6 +546,9 @@ newclient(void) {
 		gdk_display_sync(gtk_widget_get_display(c->win));
 		printf("%u\n", (guint)GDK_WINDOW_XID(GTK_WIDGET(c->win)->window));
 		fflush(NULL);
+                if (fclose(stdout) != 0) {
+			die("Error closing stdout");
+                }
 	}
 	return c;
 }
@@ -619,29 +647,32 @@ reload(Client *c, const Arg *arg) {
 }
 
 void
-resize(GtkWidget *w, GtkAllocation *a, Client *c) {
-	double zoom;
-
-	if(c->zoomed)
-		return;
-	zoom = webkit_web_view_get_zoom_level(c->view);
-	if(a->width * a->height < 300 * 400 && zoom != 0.2)
-		webkit_web_view_set_zoom_level(c->view, 0.2);
-	else if(zoom != 1.0)
-		webkit_web_view_set_zoom_level(c->view, 1.0);
+scroll_h(Client *c, const Arg *arg) {
+ scroll(gtk_scrolled_window_get_hadjustment(GTK_SCROLLED_WINDOW(c->scroll)), arg);
 }
 
 void
-scroll(Client *c, const Arg *arg) {
-	gdouble v;
-	GtkAdjustment *a;
+scroll_v(Client *c, const Arg *arg) {
+ scroll(gtk_scrolled_window_get_vadjustment(GTK_SCROLLED_WINDOW(c->scroll)), arg);
+}
 
-	a = gtk_scrolled_window_get_vadjustment(GTK_SCROLLED_WINDOW(c->scroll));
-	v = gtk_adjustment_get_value(a);
-	v += gtk_adjustment_get_step_increment(a) * arg->i;
-	v = MAX(v, 0.0);
-	v = MIN(v, gtk_adjustment_get_upper(a) - gtk_adjustment_get_page_size(a));
-	gtk_adjustment_set_value(a, v);
+void
+scroll(GtkAdjustment *a, const Arg *arg) {
+ gdouble v;
+
+ v = gtk_adjustment_get_value(a);
+ switch (arg->i){
+ case +10000:
+ case -10000:
+ v += gtk_adjustment_get_page_increment(a) * (arg->i / 10000); break;
+ case +20000:
+ case -20000:
+ default:
+ v += gtk_adjustment_get_step_increment(a) * arg->i;
+ }
+ v = MAX(v, 0.0);
+ v = MIN(v, gtk_adjustment_get_upper(a) - gtk_adjustment_get_page_size(a));
+ gtk_adjustment_set_value(a, v);
 }
 
 void
@@ -694,7 +725,6 @@ setup(void) {
 
 	/* dirs and files */
 	cookiefile = buildpath(cookiefile);
-	historyfile = buildpath(historyfile);
 	scriptfile = buildpath(scriptfile);
 	stylefile = buildpath(stylefile);
 
@@ -703,6 +733,10 @@ setup(void) {
 	soup_session_remove_feature_by_type(s, soup_cookie_get_type());
 	soup_session_remove_feature_by_type(s, soup_cookie_jar_get_type());
 	g_signal_connect_after(G_OBJECT(s), "request-started", G_CALLBACK(newrequest), NULL);
+
+	/* ssl */
+	g_object_set(G_OBJECT(s), "ssl-ca-file", cafile, NULL);
+	g_object_set(G_OBJECT(s), "ssl-strict", strictssl, NULL);
 
 	/* proxy */
 	if((proxy = getenv("http_proxy")) && strcmp(proxy, "")) {
@@ -718,7 +752,7 @@ setup(void) {
 void
 sigchld(int unused) {
 	if(signal(SIGCHLD, sigchld) == SIG_ERR)
-		die("Kann SIGCHLD-Handler nicht installieren");
+		die("Can't install SIGCHLD handler");
 	while(0 < waitpid(-1, NULL, WNOHANG));
 }
 
@@ -740,9 +774,15 @@ spawn(Client *c, const Arg *arg) {
 		setsid();
 		execvp(((char **)arg->v)[0], (char **)arg->v);
 		fprintf(stderr, "surf: execvp %s", ((char **)arg->v)[0]);
-		perror(" ging fehl");
+		perror(" failed");
 		exit(0);
 	}
+}
+
+void
+eval(Client *c, const Arg *arg) {
+	WebKitWebFrame *frame = webkit_web_view_get_main_frame(c->view);
+	evalscript(webkit_web_frame_get_global_context(frame), ((char **)arg->v)[0], "");
 }
 
 void
@@ -760,10 +800,10 @@ void
 update(Client *c) {
 	char *t;
 
-	if(c->progress != 100)
-		t = g_strdup_printf("[%i%%] %s", c->progress, c->title);
-	else if(c->linkhover)
+	if(c->linkhover)
 		t = g_strdup(c->linkhover);
+        else if(c->progress != 100)
+		t = g_strdup_printf("[%i%%] %s", c->progress, c->title);
 	else
 		t = g_strdup(c->title);
 	drawindicator(c);
@@ -779,13 +819,13 @@ updatewinid(Client *c) {
 
 void
 usage(void) {
-	fputs("surf - einfacher Browser\n", stderr);
-	die("Verwendung: surf [-e xid] [-i] [-p] [-s] [-v] [-x] [uri]\n");
+	fputs("surf - simple browser\n", stderr);
+	die("usage: surf [-e xid] [-i] [-p] [-s] [-v] [-x] [uri]\n");
 }
 
 void
 windowobjectcleared(GtkWidget *w, WebKitWebFrame *frame, JSContextRef js, JSObjectRef win, Client *c) {
-	runscript(frame, js);
+	runscript(frame);
 }
 
 void
@@ -817,7 +857,7 @@ main(int argc, char *argv[]) {
 		switch(argv[i][1]) {
 		case 'e':
 			if(++i < argc)
-				embed = atoi(argv[i]);
+				embed = strtol(argv[i], NULL, 0);
 			else
 				usage();
 			break;
@@ -834,7 +874,7 @@ main(int argc, char *argv[]) {
 			showxid = TRUE;
 			break;
 		case 'v':
-			die("surf-"VERSION", © 2009 surf engineers, siehe LICENSE für Details\n");
+			die("surf-"VERSION", ©2009-2012 surf engineers, see LICENSE for details\n");
 		default:
 			usage();
 		}
@@ -849,3 +889,4 @@ main(int argc, char *argv[]) {
 	cleanup();
 	return EXIT_SUCCESS;
 }
+

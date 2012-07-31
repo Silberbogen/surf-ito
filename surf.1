@@ -1,6 +1,6 @@
 .TH SURF 1 surf\-VERSION
 .SH NAME
-surf \- einfacher webkit-basierter Browser
+surf \- simple webkit-based browser
 .SH SYNOPSIS
 .B surf
 .RB [-e\ xid]
@@ -10,84 +10,95 @@ surf \- einfacher webkit-basierter Browser
 .RB [-v]
 .RB [-x]
 .RB "URI"
-.SH BESCHREIBUNG
-surf ist ein einfacher Web-Browser basierend auf WebKit/GTK+. Es besteht für ihn die Möglichkeit Webseiten anzuzeigen und Links zu folgen. Er unterstützt das XEmbed-Protokoll welcher es ermöglicht ihn in andere Anwendungen einzubinden. Weiterhin kann surf auf eine andere URI durch Einstellung seiner XProperties gerichtet werden.
-.SH OPTIONEN
+.SH DESCRIPTION
+surf is a simple Web browser based on WebKit/GTK+. It is able
+to display websites and follow links. It supports the XEmbed protocol
+which makes it possible to embed it in another application. Furthermore,
+one can point surf to another URI by setting its XProperties.
+.SH OPTIONS
 .TP
 .B \-e xid
-Reparent ein Fenster spezifiziert durch xid.
+Reparents to window specified by xid.
 .TP
 .B \-i
-Bilder ausschalten
+Disable Images
 .TP
 .B \-p
-Plugins ausschalten
+Disable Plugins
 .TP
 .B \-s
-JavaScript ausschalten
+Disable Javascript
 .TP
 .B \-v
-Gibt die Versions-Information an die Standard-Ausgabe aus und beendet sich dann.
+Prints version information to standard output, then exits.
 .TP
 .B \-x
-Gibt xid an die Standard-Ausgabe aus. Dies kann verwendet werden um Script mit dem Browser zu nutzen unter Verwendung von 
+Prints xid to standard output. This can be used to script the browser by using
 .BR xprop(1).
-.SH VERWENDUNG
+.SH USAGE
 .B Escape
-Unterbricht das Laden der gegenwärtigen Seite oder hält den Download an.
+Stops loading current page or stops download.
 .TP
-.B STRG\-h
-Geht einen Schritt zurück im Verlauf.
+.B Ctrl\-h
+Walks back the history.
 .TP
-.B STRG\-l
-Geht einen Schritt vor im Verlauf.
+.B Ctrl\-l
+Walks forward the history.
 .TP
-.B STRG\-k
-Blättert eine Bildschirmseite aufwärts.
+.B Ctrl\-k
+Scrolls page upwards.
 .TP
-.B STRG\-j
-Blättert eine Bildschirmseite abwärts.
+.B Ctrl\-j
+Scrolls page downwards.
 .TP
-.B STRG\-Umschalten\-k
-Vergrößert die Anzeige der Bildschirmseite.
+.B Ctrl\-Shift\-k
+Zooms page in.
 .TP
-.B STRG\-Umschalten\-j
-Verkleinert die Anzeige der Bildschirmseite.
+.B Ctrl\-Shift\-j
+Zooms page out
 .TP
-.B STRG\-Umschalten\-i
-Setzt die Verkleinerung/Vergrößerung der Bildschirmseite zurück auf Normale (100%).
+.B Ctrl\-Shift\-i
+Resets Zoom
 .TP
-.B STRG\-s
-Öffnet die Such-Leiste.
+.B Ctrl\-f
+Opens the search-bar.
 .TP
-.B STRG\-n
-Geht zum nächsten Suchergebnis.
+.B Ctrl\-n
+Go to next search result.
 .TP
-.B STRG\-Umschalten\-n
-Geht zum vorhergehenden Suchergebnis.
+.B Ctrl\-Shift\-n
+Go to previous search result.
 .TP
-.B STRG\-g
-Öffnet die URL-Leiste.
+.B Ctrl\-g
+Opens the URL-bar.
 .TP
-.B STRG\-p
-Lädt eine URI aus der primären Auswahl.
+.B Ctrl\-p
+Loads URI from primary selection.
 .TP
-.B STRG\-Umschalten\-p
-Öffnet den Druckseiten-Dialog.
+.B Ctrl\-Shift\-p
+Calls Printpage Dialog.
 .TP
-.B STRG\-r
-Lädt die Webseite neu unter Verwendung des Caches.
+.B Ctrl\-r
+Reloads the website.
 .TP
-.B STRG\-Umschalten\-r
-Lädt die Webseite neue ohne Verwendung des Caches.
+.B Ctrl\-Shift\-r
+Reloads the website without using cache.
 .TP
-.B STRG\-y
-Kopiert die gegenwärtige URI in die primäre Auswahl.
+.B Ctrl\-y
+Copies current URI to primary selection.
 .TP
-.B STRG\-o
-Zeigt den Quellcode der gegenwärtigen Seite an.
-.SH SIEHE AUCH
-.BR dmenu(1)
-.BR xprop(1)
-.SH FEHLER / BUGS
-Bitte teile sie mit!
+.B Ctrl\-o
+show the sourcecode of the current page.
+.SH ENVIRONMENT
+.TP
+.B SURF_USERAGENT
+If this variable is set upon startup, surf will use it as the useragent string
+.TP
+.B http_proxy
+If this variable is set and not empty upon startup, surf will use it as the http proxy
+.SH SEE ALSO
+.BR dmenu(1),
+.BR xprop(1),
+.BR tabbed(1)
+.SH BUGS
+Please report them!
