@@ -1,6 +1,6 @@
 .TH SURF 1 surf\-VERSION
 .SH NAME
-surf \- simple webkit-based browser
+surf-itoo \- ein Klon  des einfachen webkit-basierter Browsers surf
 .SH SYNOPSIS
 .B surf
 .RB [-e\ xid]
@@ -10,95 +10,92 @@ surf \- simple webkit-based browser
 .RB [-v]
 .RB [-x]
 .RB "URI"
-.SH DESCRIPTION
-surf is a simple Web browser based on WebKit/GTK+. It is able
-to display websites and follow links. It supports the XEmbed protocol
-which makes it possible to embed it in another application. Furthermore,
-one can point surf to another URI by setting its XProperties.
-.SH OPTIONS
+.SH BESCHREIBUNG
+surf ist ein einfacher Web-Browser basierend auf WebKit/GTK+. Es besteht für ihn die Möglichkeit Webseiten anzuzeigen und Links zu folgen. Er unterstützt das XEmbed-Protokoll welcher es ermöglicht ihn in andere Anwendungen einzubinden. Weiterhin kann surf auf eine andere URI durch Einstellung seiner XProperties gerichtet werden.
+.SH OPTIONEN
 .TP
 .B \-e xid
-Reparents to window specified by xid.
+Reparent ein Fenster spezifiziert durch xid.
 .TP
 .B \-i
-Disable Images
+Bilder ausschalten
 .TP
 .B \-p
-Disable Plugins
+Plugins ausschalten
 .TP
 .B \-s
-Disable Javascript
+JavaScript ausschalten
 .TP
 .B \-v
-Prints version information to standard output, then exits.
+Gibt die Versions-Information an die Standard-Ausgabe aus und beendet sich dann.
 .TP
 .B \-x
-Prints xid to standard output. This can be used to script the browser by using
+Gibt xid an die Standard-Ausgabe aus. Dies kann verwendet werden um Script mit dem Browser zu nutzen unter Verwendung von 
 .BR xprop(1).
-.SH USAGE
+.SH VERWENDUNG
 .B Escape
-Stops loading current page or stops download.
+Unterbricht das Laden der gegenwärtigen Seite oder hält den Download an.
 .TP
-.B Ctrl\-h
-Walks back the history.
+.B STRG\-h
+Geht einen Schritt zurück im Verlauf.
 .TP
-.B Ctrl\-l
-Walks forward the history.
+.B STRG\-l
+Geht einen Schritt vor im Verlauf.
 .TP
-.B Ctrl\-k
-Scrolls page upwards.
+.B STRG\-k
+Blättert eine Bildschirmseite aufwärts.
 .TP
-.B Ctrl\-j
-Scrolls page downwards.
+.B STRG\-j
+Blättert eine Bildschirmseite abwärts.
 .TP
-.B Ctrl\-Shift\-k
-Zooms page in.
+.B STRG\-Umschalten\-k
+Vergrößert die Anzeige der Bildschirmseite.
 .TP
-.B Ctrl\-Shift\-j
-Zooms page out
+.B STRG\-Umschalten\-j
+Verkleinert die Anzeige der Bildschirmseite.
 .TP
-.B Ctrl\-Shift\-i
-Resets Zoom
+.B STRG\-Umschalten\-i
+Setzt die Verkleinerung/Vergrößerung der Bildschirmseite zurück auf Normale (100%).
 .TP
-.B Ctrl\-f
-Opens the search-bar.
+.B STRG\-f
+Öffnet die Such-Leiste.
 .TP
-.B Ctrl\-n
-Go to next search result.
+.B STRG\-n
+Geht zum nächsten Suchergebnis.
 .TP
-.B Ctrl\-Shift\-n
-Go to previous search result.
+.B STRG\-Umschalten\-n
+Geht zum vorhergehenden Suchergebnis.
 .TP
-.B Ctrl\-g
-Opens the URL-bar.
+.B STRG\-g
+Öffnet die URL-Leiste.
 .TP
-.B Ctrl\-p
-Loads URI from primary selection.
+.B STRG\-p
+Lädt eine URI aus der primären Auswahl.
 .TP
-.B Ctrl\-Shift\-p
-Calls Printpage Dialog.
+.B STRG\-Umschalten\-p
+Öffnet den Druckseiten-Dialog.
 .TP
-.B Ctrl\-r
-Reloads the website.
+.B STRG\-r
+Lädt die Webseite neu unter Verwendung des Caches.
 .TP
-.B Ctrl\-Shift\-r
-Reloads the website without using cache.
+.B STRG\-Umschalten\-r
+Lädt die Webseite neue ohne Verwendung des Caches.
 .TP
-.B Ctrl\-y
-Copies current URI to primary selection.
+.B STRG\-y
+Kopiert die gegenwärtige URI in die primäre Auswahl.
 .TP
-.B Ctrl\-o
-show the sourcecode of the current page.
-.SH ENVIRONMENT
+.B STRG\-o
+Zeigt den Quellcode der gegenwärtigen Seite an.
+.SH UMGEBUNG
 .TP
 .B SURF_USERAGENT
-If this variable is set upon startup, surf will use it as the useragent string
+Wenn diese Variable vor dem Start besetzt wurde, wird surf den angegebenen Useragen-String verwenden
 .TP
 .B http_proxy
-If this variable is set and not empty upon startup, surf will use it as the http proxy
-.SH SEE ALSO
-.BR dmenu(1),
-.BR xprop(1),
+Wenn diese Variable gesetzt und nicht leer ist vor dem Start, wird surf den angegebenen Http-Proxy verwenden
+.SH SIEHE AUCH
+.BR dmenu(1)
+.BR xprop(1)
 .BR tabbed(1)
-.SH BUGS
-Please report them!
+.SH FEHLER / BUGS
+Bitte teile sie mit!
